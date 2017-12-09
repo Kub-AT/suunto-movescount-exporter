@@ -1,8 +1,9 @@
+import datetime
 import json
 import os
-import requests
-import datetime
+
 import arrow
+import requests
 
 from .models import MoveActivity
 
@@ -18,12 +19,12 @@ class Movescount:
         OVERVIEW = 'http://www.movescount.com/overview'
         EXPORT = 'http://www.movescount.com/move/export'
 
-    def __init__(self, _format: str='fit', **settings: dict):  # TODO: make multiple formats
-        assert _format in self.AVAILABLE_FORMATS
+    def __init__(self, formats: list, **settings):
+        assert len(list(set(formats) & set(self.AVAILABLE_FORMATS))) == len(formats)
         session = requests.Session()
         session.headers['User-Agent'] = self.USER_AGENT
 
-        self.format = _format
+        self.formats = formats
         self.session = session
         self.settings = settings
 
@@ -60,13 +61,18 @@ class Movescount:
         return [MoveActivity(move) for move in response.json()['Moves']]
 
     def export(self, activity: MoveActivity, path: str):
+        for _format in self.formats:
+            self._export_single(activity, path, _format)
+
+    def _export_single(self, activity: MoveActivity, path: str, _format: str):
         resp = self.session.get(self.Urls.EXPORT, params={
             'id': activity.id,
-            'format': self.format
+            'format': _format
         })
         resp.raise_for_status()
         time = activity.time.format('YYYY-MM-DD HH:mm:ss')
-        path = os.path.join(path, f'{activity.id}-{time}.{self.format}')
+        path = os.path.join(path, f'{activity.id}-{time}.{_format}')
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'wb') as f:
             f.write(resp.content)
         return path
